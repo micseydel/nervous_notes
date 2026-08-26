@@ -3,7 +3,7 @@ requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "nervous_notes_micseydel"
+name = "nervous-notes"
 version = "0.0.1"
 authors = [
   { name="Michael Seydel", email="contact@micseydel.me" },
@@ -17,6 +17,20 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
+dependencies = [
+	"pykka==4.4.2",
+	"ruamel.yaml==0.19.1",
+	"paho-mqtt==2.1.0",
+	"watchdog==6.0.0",
+	"requests==2.34.2",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
 [project.urls]
 Homepage = "https://github.com/micseydel/nervous_notes"

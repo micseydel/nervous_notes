@@ -1,4 +1,6 @@
 dist
 .idea
 .DS_Store
+venv3.10
+**/__pycache__
 

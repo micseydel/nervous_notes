@@ -16,6 +16,8 @@ parser.add_argument("vault_path", help="Path to the vault directory", type=str)
 # FIXME: need to make sure this is properly optional, in the Orchestrator
 parser.add_argument("--scripts", help="The directory for scripts")
 
+parser.add_argument("--libraries", help="Libraries for scripts to have import access to")
+
 args = parser.parse_args()
 
 mqtt_config = get_config_from_env()
@@ -29,16 +31,15 @@ NervousNote.start_background_actors(args.vault_path, mqtt_config)
 
 deploy_debug_notes = False
 # pykka.DeadLetterRouter.default_router().start() #?
-orchestrator = Orchestrator.wake("Nervous Notes Orchestrator", args.scripts, deploy_debug_notes)
+orchestrator = Orchestrator.wake("Nervous Notes Orchestrator", args.scripts, args.libraries, deploy_debug_notes)
 
 try:
     while True:
         input()
 except KeyboardInterrupt:
     logging.info("KeyboardInterrupt detected, stopping...")
-    orchestrator.stop()
+finally:
     logging.info("Orchestrator stopped")
     NervousNote.stop_background_actors()
-
-    # FIXME: what more is needed for a proper, clean shutdown?
-    # exit(0)
+    orchestrator.stop()
+    logging.info("Background actors stopped")

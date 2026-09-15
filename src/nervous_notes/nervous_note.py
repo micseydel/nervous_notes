@@ -46,6 +46,7 @@ class NervousNoteSupport:
     def stop(self):
         self.vault_watcher.stop()
         self.external_messages_actor_ref.stop()
+        self.vault_router.stop()
 
 
 class NervousNote(pykka.ThreadingActor):

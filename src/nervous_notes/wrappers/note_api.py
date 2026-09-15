@@ -1,7 +1,8 @@
+import itertools
 import logging
 import os
 from time import ctime
-from typing import Tuple
+from typing import Tuple, Callable
 
 from ruamel.yaml import YAML
 
@@ -105,7 +106,7 @@ class NoteAPI:
 
             frontmatter = self.yaml.load(''.join(frontmatter_lines))
         else:
-            raise Exception("no end to frontmatter")  # FIXME
+            lines = itertools.chain([maybe_frontmatter_start], lines)
 
         markdown = ''.join(lines)  # remaining
         return frontmatter, markdown
@@ -122,34 +123,14 @@ class NoteAPI:
             return None
 
     def reset_button_at_start_of_markdown(self):
-        contents = self.get_file_contents()
-        if contents is None:
-            return None
+        def upserter(markdown_lines: list[str]) -> str:
+            markdown_lines[0] = markdown_lines[0].replace("- [x]", "- [ ]")
 
-        lines = string_to_genlines(contents)
+            return ''.join(markdown_lines)
 
-        frontmatter_start = next(lines)
-        if frontmatter_start != "---\n":
-            logging.warning(f"Expected frontmatter but first line was {frontmatter_start}")
-            return None
+        self.upsert_markdown_lines(upserter)
 
-        frontmatter_lines = []
-        for line in lines:
-            if line == "---\n":
-                # done with frontmatter
-                break
-            frontmatter_lines.append(line)
-
-        frontmatter = ''.join(frontmatter_lines)
-        markdown_lines = list(lines)
-        markdown_lines[0] = markdown_lines[0].replace("- [x]", "- [ ]")
-
-        # FIXME: use upsert_markdown
-        self.set_file_contents(f"""---
-{frontmatter}---
-{''.join(markdown_lines)}""")
-
-    def upsert_markdown(self, upserter):
+    def upsert_markdown_lines(self, upserter: Callable[[list[str]], str | None]):
         contents = self.get_file_contents()
         if contents is None:
             return None
@@ -169,12 +150,20 @@ class NoteAPI:
             frontmatter_lines.append(line)
 
         frontmatter = ''.join(frontmatter_lines)
-        markdown = ''.join(lines)  # remaining
 
-        self.set_file_contents(f"""---
+        updated_markdown = upserter(list(lines))
+        if updated_markdown is not None:
+            self.set_file_contents(f"""---
 {frontmatter}---
-{upserter(markdown)}""")
+{updated_markdown}""")
 
+        return updated_markdown
+
+    def upsert_markdown(self, upserter: Callable[[str], str | None]) -> str | None:
+        def wrapper(markdown_lines: list[str]) -> str | None:
+            return upserter(''.join(markdown_lines))
+
+        return self.upsert_markdown_lines(wrapper)
 
     def get_raw_frontmatter(self) -> str | None:
         contents = self.get_file_contents()
@@ -184,7 +173,6 @@ class NoteAPI:
         lines = string_to_genlines(contents)
 
         return _raw_note_to_frontmatter_and_markdown(lines)[0]
-
 
     def get_frontmatter(self) -> object | None:
         raw = self.get_raw_frontmatter()

@@ -65,7 +65,7 @@ class VaultWatcher(pykka.ThreadingActor):
             if ext.lower() == ".md":
                 subscriber = self.subscribers.get(maybe_note_name.lower())
                 if subscriber is not None:
-                    logging.info(f"forwarding message to [[{maybe_note_name}]]")
+                    logging.debug(f"forwarding message to [[{maybe_note_name}]]")
                     subscriber.tell(msg)
                 else:
                     logging.debug(f"No subscriber for {maybe_note_name} (lowered, in: ({self.subscribers})")
@@ -77,11 +77,11 @@ class VaultWatcher(pykka.ThreadingActor):
             logging.warning(f"Unexpected message type {type(msg)}, expected VaultNoteSubscription or FileModifiedEvent (with support for more FileSystemEvents coming later) ;; {msg}")
 
     def on_stop(self):
-        logging.info("Stopping file watcher...")
+        logging.info("Stopping VaultWatcher...")
         if self.observer:
             self.observer.stop()
             self.observer.join()
-        logging.info("File watcher stopped :)")
+        logging.info("VaultWatcher stopped :)")
 
 
 class FolderWatcher(pykka.ThreadingActor):
@@ -125,11 +125,11 @@ class FolderWatcher(pykka.ThreadingActor):
             logging.warning(f"Unexpected message type {type(msg)}, expected FileModifiedEvent")
 
     def on_stop(self):
-        logging.info("Stopping file watcher...")
+        logging.info("Stopping FolderWatcher...")
         if self.observer:
             self.observer.stop()
             self.observer.join()
-        logging.info("File watcher stopped :)")
+        logging.info("FolderWatcher stopped :)")
 
 
 # just bridges watchdog to the actor

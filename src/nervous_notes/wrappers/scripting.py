@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import requests
+import re
 from typing import Dict
 from typing import TYPE_CHECKING  # FIXME: remove
 
@@ -19,7 +20,7 @@ from ..wrappers.note_api import NoteAPI, datetimestamped_markdown_list_line, tim
 class ScriptPath:
     scripts_dir: str
     script_name: str
-    script_path:str
+    script_path: str
 
     def __init__(self, scripts_dir: str, script_name: str) -> None:
         self.scripts_dir = scripts_dir
@@ -52,12 +53,13 @@ class ScriptHarness:
             "requests": requests,
             "datetime": datetime,
             "today": clock.today,
+            "re": re,
 
             # utils
             "mqtt": mqtt,
             "note_name": my_note.note_name,
             # "vault_name": self.vault_name,
-            "topic": topic,  # FIXME: this should change with the frontmatter
+            "topic": topic,  # FIXME: this should change with the frontmatter, and kind of shadows on_mqtt_message and such
             "set_timer": self.set_timer,
             "cancel_timer": self.cancel_timer,
             "datetimestamped_markdown_list_line": datetimestamped_markdown_list_line,
@@ -128,7 +130,7 @@ class ScriptHarness:
             logging.exception(f"on_start call failed {e}")
 
     def on_note_modified(self) -> None:
-        logging.info(f"[on_note_modified] [[{self.my_note.note_name}]] calling self.script_scope[\"on_note_modified\"]()")
+        logging.debug(f"[on_note_modified] [[{self.my_note.note_name}]] calling self.script_scope[\"on_note_modified\"]()")
         try:
             self.script_scope["on_note_modified"]()
         except Exception as e:
@@ -154,3 +156,4 @@ class ScriptHarness:
 def publish_to_ntfy(channel: str, message: str) -> None:
     # from https://docs.ntfy.sh/publish/
     requests.post(f"https://ntfy.sh/{channel}", data=message.encode(encoding='utf-8'))
+    # FIXME: can I return something like Scala's Try[Exception]?

@@ -16,11 +16,12 @@ class Orchestrator(NervousNote):
     This is the top level orchestrator - it starts (and links to) FIXME
     """
 
-    def __init__(self, note_name: str, scripts_dir: str, deploy_debug_notes: bool, *args, **kwargs):
+    def __init__(self, note_name: str, scripts_dir: str, libraries_dir: str, deploy_debug_notes: bool, *args, **kwargs):
         # this runs in the spawner's context, whereas on_start runs in the actor thread
         super().__init__(note_name, *args, **kwargs)
 
         self.scripts_dir = scripts_dir
+        self.libraries_dir = libraries_dir
         self.started = []
         self.deploy_debug_notes = deploy_debug_notes
 
@@ -31,7 +32,7 @@ class Orchestrator(NervousNote):
         super().on_start()
 
         if self.scripts_dir is not None:
-            self.started.append(NoteCompanionScriptsManager.wake(NoteCompanionScriptsManager_NOTE_NAME, self.scripts_dir, self.deploy_debug_notes))
+            self.started.append(NoteCompanionScriptsManager.wake(NoteCompanionScriptsManager_NOTE_NAME, self.scripts_dir, self.libraries_dir, self.deploy_debug_notes))
 
         logging.warning(f"[[{NoteEmbeddedScriptsManager_NOTE_NAME}]] is not being used")
         # experimental_embedded_scripts_note_path = os.path.join(self.support.vault_path, f"{NoteEmbeddedScriptsManager_NOTE_NAME}.md")

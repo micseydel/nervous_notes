@@ -30,6 +30,8 @@ this_is: yaml
 - (markdown)
 ```
 
+FIXME `--library`
+
 ## Glossary
 
 - FIXME
@@ -64,6 +66,7 @@ Again, from the actor model paper:
 
 - Pykka's thread/GIL limits are inherited
   - multiprocessing support is limited and experimental
+  - imports from `--library` as NOT hot-reloaded; a warning is issued if this is detected
 - globals are shared between hot-reloaded **embedded** nervous notes
 - if someone removes a function from a hot reloading script, they should replace it with `pass` in the body before removing it, or else the prior version will remain active
 - there are currently no built-in circuit breakers
@@ -87,3 +90,4 @@ I originally implemented this in Scala, where I called it "[woke notes](https://
 - replace blocking I/O with non-blocking
 - replace Pykka with something more Akka-like
   - this would likely be an _enormous_ undertaking
+- support actor-scoped `--library` imports, so that hot-reloading of imports can work

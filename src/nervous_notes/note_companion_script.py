@@ -1,9 +1,10 @@
-import logging
 import os
+import sys
+import logging
 from time import ctime
 from typing import TypeVar
 
-from pykka import ActorRef
+from pykka import ActorRef, ActorDeadError
 from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .nervous_note import NervousNote, MqttWrapper
@@ -28,22 +29,24 @@ class NoteCompanionScript(NervousNote):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = ScriptedNoteHarness(
-            self.actor_ref, self.my_note,
-            self.topic, self.mqtt,
-            self.support.vault_router,
-            self.script_path,
-        )
-        self.script_wrapper.on_start()
+        try:
+            self.script_wrapper = ScriptedNoteHarness(
+                self.actor_ref, self.my_note,
+                self.topic, self.mqtt,
+                self.support.vault_router,
+                self.script_path,
+            )
+            self.script_wrapper.on_start()
+        except Exception as e:
+            logging.exception(f"Could not start script {self.script_path} ({e}), stopping this actor...")
+            self.stop()
 
     def on_receive(self, message: object):
-        logging.info(f"CANARY [[{self.note_name}]]")
         # super on_receive ignored intentionally, those things are managed explicitly here
 
         if (isinstance(message, FileModifiedEvent)
                 # FIXME: on_note_created ?
                 or isinstance(message, FileCreatedEvent)):
-            logging.info(f"CANARY [[{self.note_name}]] calling on_note_modified()")
             self.script_wrapper.on_note_modified()
         elif isinstance(message, MqttPublish):
             self.script_wrapper.on_mqtt_message(message.topic, message.payload)
@@ -61,7 +64,8 @@ class NoteCompanionScript(NervousNote):
                 logging.warning(f"Unexpected type {type(message)} {message}")
 
     def on_stop(self):
-        self.script_wrapper.on_stop()
+        if self.script_wrapper is not None:
+            self.script_wrapper.on_stop()
 
 
 class TemplateScript:
@@ -71,9 +75,10 @@ class TemplateScript:
 
 
 class NoteCompanionScriptsManager(NervousNote):
-    def __init__(self, note_name: str, scripts_dir: str, deploy_debug_notes: bool, *args, **kwargs):
+    def __init__(self, note_name: str, scripts_dir: str, libraries_dir: str, deploy_debug_notes: bool, *args, **kwargs):
         super().__init__(note_name, *args, **kwargs)
         self.scripts_dir = scripts_dir
+        self.libraries_dir = libraries_dir
         self.scripts_watcher = None
         self.nervous_notes = {}  # from note name to ActorRef
         self.deploy_debug_notes = deploy_debug_notes
@@ -83,6 +88,8 @@ class NoteCompanionScriptsManager(NervousNote):
 
         # FIXME: need to receive NEW file creations too! not just modified!
         self.scripts_watcher = FolderWatcher.start(self.scripts_dir, ".py", self.actor_ref)
+
+        sys.path.append(os.path.abspath(self.scripts_dir))
 
         python_scripts = [script for script in os.listdir(self.scripts_dir) if script.lower().endswith(".py")]
         note_names_for_scripts = [os.path.splitext(script)[0] for script in python_scripts]
@@ -100,15 +107,20 @@ class NoteCompanionScriptsManager(NervousNote):
             if message.src_path.startswith(self.support.vault_path):
                 self.on_note_modified()
             elif message.src_path.startswith(self.scripts_dir):
-                _, filename = os.path.split(message.src_path)
+                file_dir, filename = os.path.split(message.src_path)
                 maybe_note_name, maybe_md = os.path.splitext(filename)
                 if maybe_md.lower() == ".py":
-                    try:
-                        self.nervous_notes[maybe_note_name].tell("SCRIPT_MODIFIED")
-                    except KeyError:
-                        logging.warning(f"{maybe_note_name} was not in {list(self.nervous_notes.keys())}")
-                        raise
-                    logging.warning(f"NOT HOT RELOADING {message.src_path}")
+                    if file_dir == self.scripts_dir:
+                        try:
+                            self.nervous_notes[maybe_note_name].tell("SCRIPT_MODIFIED")
+                        except KeyError:
+                            logging.warning(f"{maybe_note_name} was not in {list(self.nervous_notes.keys())}")
+                            raise
+                        except ActorDeadError:
+                            logging.exception(f"{maybe_note_name} is dead, could not send a FileModifiedEvent to it")
+                        logging.warning(f"NOT HOT RELOADING {message.src_path}")  # FIXME - it DOES get hotreloaded, doesn't it?
+                    else:
+                        logging.warning(f"Path {message.src_path} not eligible for hot reloading, restart the app to reload")
                 else:
                     logging.info(f"Did not recognize file ext {maybe_md}, ignoring {message.src_path}")
             else:
@@ -124,7 +136,10 @@ class NoteCompanionScriptsManager(NervousNote):
                     logging.warning(f"Got a file created event for script {script_path_to_wake} but it was already created (ignoring)")
                 else:
                     logging.info(f"Detected new script {script_path_to_wake}, loading it and adding it for hotreloading...")
-                    actor_ref = NoteCompanionScript.wake(note_name, script_path_to_wake)
+                    actor_ref = NoteCompanionScript.wake(
+                        note_name,
+                        ScriptPath(self.scripts_dir, note_name)
+                    )
                     self.nervous_notes[note_name] = actor_ref
                     self.__update_note()
             else:
@@ -181,10 +196,11 @@ class ScriptedNoteHarness(ScriptHarness):
         return script
 
     def on_stop(self) -> None:
-        logging.info(f"stopping ScriptedNoteHarness")
+        logging.info(f"stopping ScriptedNoteHarness for [[{self.my_note.note_name}]]")
         try:
             for subordinate in self._scripts:
                 subordinate.stop()
             self.script_scope["on_stop"]()
         except Exception as e:
             logging.exception(f"on_stop call failed {e}")
+        logging.info(f"stopped ScriptedNoteHarness for [[{self.my_note.note_name}]]")

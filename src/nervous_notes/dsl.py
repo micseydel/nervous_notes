@@ -1,12 +1,13 @@
 """
 used for typing, not at runtime
 
-runtime comes from scriping.CompiledScript.script_scope
+runtime comes from scriping.ScriptHarness.script_scope
 """
 
 import logging
 import json
 import datetime
+import re
 from time import ctime, sleep
 
 import requests
